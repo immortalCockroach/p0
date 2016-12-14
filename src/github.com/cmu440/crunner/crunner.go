@@ -4,8 +4,9 @@ import (
     "fmt"
     "net"
 
-    "os"
-    "p0/src/github.com/cmu440/p0"
+
+    "time"
+    "bufio"
 )
 
 const (
@@ -27,22 +28,39 @@ func main() {
     fmt.Println(conn)
     //checkError(err)
 
+    messageReader := bufio.NewReader(conn)
+
+    _, _= conn.Write([]byte("put,1,123\n"))
 
     _, _= conn.Write([]byte("get,1\n"))
-    result, _ := p0.ReadLine(conn)
+    result, _ := ReadLine(messageReader)
+
+    _, _= conn.Write([]byte("put,1,123213\n"))
+
     fmt.Println(string(result))
     fmt.Println("get ok")
 
-    _, _= conn.Write([]byte("put,1,123\n"))
     fmt.Println("put ok")
 
     _, _= conn.Write([]byte("get,1\n"))
+    result, _ = ReadLine(messageReader)
     fmt.Println("get ok")
 
-    result, _ = p0.ReadLine(conn)
+
     //checkError(err)
     fmt.Println(string(result))
 
+    time.Sleep(10 * time.Second)
+}
 
-    os.Exit(0)
+func ReadLine(messageReader *bufio.Reader) ([]byte, error) {
+
+
+    res, err := messageReader.ReadBytes(byte('\n'))
+
+    if err != nil {
+        return nil, err
+    }
+
+    return res[:len(res) - 1], nil
 }

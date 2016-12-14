@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"p0/src/github.com/cmu440/p0"
+
 )
 
 const defaultPort = 9999
@@ -25,5 +26,7 @@ func main() {
 	fmt.Printf("Started KeyValueServer on port %d...\n", defaultPort)
 
 	// Block forever.
-	select {}
+	select {
+
+	}
 }
