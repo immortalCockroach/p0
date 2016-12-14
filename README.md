@@ -87,3 +87,66 @@ if debugMode {
     fmt.Println("your debug and test code")
 }
 ```
+
+## 和[官方实现](http://www.cs.cmu.edu/~srini/15-440/lectures/code_p0_solution.go)的区别
+
+官方的实现中，当client主动退出的时候，client对应的`readRoutine`和`writeRoutine`
+仍然处于运行中。
+
+这里的实现是在`readRoutine`读取到`io.EOF`的时候，server的`mainRoutine`向client的
+2个channel写入退出信息，2个routine读到之后return
+
+有个坑在于`readRoutine`读取到`io.EOF`之后一直循环读到`io.EOF`,并向`exitClientChannel`循环
+发送client本身。如果client再向`readRoutine`写入退出信息的话可能会死锁。
+
+例如下面的代码：第一个是client的`readRoutine`，第二个是server的`mainRoutine`
+
+当client发送第二个`io.EOF`的时候，server可能刚刚向`client.exitReadChannel`中写入0
+而此时如果server想往下执行，那么必须在client端执行到`<-client.exitReadChannel`之后，
+但是client端被`exitClientsChannel`阻塞。
+而client端想往下执行，那么必须在server端再次从`exitClientsChannel`中读到才可以，
+而server也因为client端无法读取到退出信息而阻塞。
+
+最终导致了死锁
+
+```Golang
+ case <-client.exitReadChannel:
+			return
+	default:
+				res, err := messageReader.ReadBytes(byte('\n'))
+
+				if err == io.EOF {
+					if kvs.debugMode {
+						fmt.Println("a channel exit initiative")
+					}
+					kvs.exitClientsChannel <- client
+```
+
+```Golang
+ case exitClient := <-kvs.exitClientsChannel:
+    for i, client := range kvs.clients {
+        if client == exitClient {
+            // client端主动关闭之后，将对应的2个routine结束
+            client.exitReadChannel <- 0
+            client.exitWriteChannel <- 0
+            kvs.clients = append(kvs.clients[:i], kvs.clients[i+1:]...)
+            break
+        }
+    }
+```
+
+
+
+故此处设置了第一次读到`io.EOF`之后修改标志位`exited`，`default`块不再执行。
+
+```Golang
+if !exited { // 防止无限读取到EOF的死锁
+				res, err := messageReader.ReadBytes(byte('\n'))
+
+				if err == io.EOF {
+					if kvs.debugMode {
+						fmt.Println("a channel exit initiative")
+					}
+					exited = true
+					kvs.exitClientsChannel <- client
+```

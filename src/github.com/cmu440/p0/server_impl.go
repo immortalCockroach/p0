@@ -148,6 +148,9 @@ func (kvs *keyValueServer) serverMainRoutine() {
 		case exitClient := <-kvs.exitClientsChannel:
 			for i, client := range kvs.clients {
 				if client == exitClient {
+					// client端主动关闭之后，将对应的2个routine结束
+					client.exitReadChannel <- 0
+					client.exitWriteChannel <- 0
 					kvs.clients = append(kvs.clients[:i], kvs.clients[i+1:]...)
 					break
 				}
@@ -200,40 +203,42 @@ func (kvs *keyValueServer) acceptRequest() {
 
 func clientReadRoutine(kvs *keyValueServer, client *ClientProxy) {
 	messageReader := bufio.NewReader(client.conn)
+	exited := false
 	for {
 		select {
 		case <-client.exitReadChannel:
 			return
 		default:
-			res, err := messageReader.ReadBytes(byte('\n'))
+			if !exited { // 防止无限读取到EOF的死锁
+				res, err := messageReader.ReadBytes(byte('\n'))
 
-			if err == io.EOF {
-				if kvs.debugMode {
-					fmt.Println("a channel exit initiative")
-				}
-				kvs.exitClientsChannel <- client
-			}
-
-			if err != nil {
-				return
-			}
-
-			queryParam := bytes.Split(res, []byte(","))
-			if kvs.debugMode {
-				if string(queryParam[0]) == PUT {
-					fmt.Println("%s:%v", string(queryParam[1]), queryParam[2])
+				if err == io.EOF {
+					if kvs.debugMode {
+						fmt.Println("a channel exit initiative")
+					}
+					exited = true
+					kvs.exitClientsChannel <- client
+				} else if err != nil {
+					return
 				} else {
-					fmt.Println("%s", string(queryParam[1]))
-				}
-			}
-			switch string(queryParam[0]) {
+					queryParam := bytes.Split(res, []byte(","))
+					if kvs.debugMode {
+						if string(queryParam[0]) == PUT {
+							fmt.Println("%s:%v", string(queryParam[1]), queryParam[2])
+						} else {
+							fmt.Println("%s", string(queryParam[1]))
+						}
+					}
+					switch string(queryParam[0]) {
 
-			case PUT:
-				// 由于取出的消息需要\n结果，此处将value\n作为整体存入
-				kvs.queryChannel <- &Query{false, string(queryParam[1]), queryParam[2]}
-			case GET:
-				// 此处需要将key之后的\n去掉
-				kvs.queryChannel <- &Query{isGet: true, key: string(queryParam[1][:len(queryParam[1])-1])}
+					case PUT:
+						// 由于取出的消息需要\n结果，此处将value\n作为整体存入
+						kvs.queryChannel <- &Query{false, string(queryParam[1]), queryParam[2]}
+					case GET:
+						// 此处需要将key之后的\n去掉
+						kvs.queryChannel <- &Query{isGet: true, key: string(queryParam[1][:len(queryParam[1])-1])}
+					}
+				}
 			}
 		}
 
