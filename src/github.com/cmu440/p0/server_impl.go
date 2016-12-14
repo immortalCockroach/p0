@@ -13,7 +13,22 @@ import (
 	"io"
 	"strconv"
 )
+/**
+	整体结构
 
+		          clientChannel		    net.Conn
+	(acceptRoutine)			(conn.Write)
+	server           ------------> clientProxy ----------------> Client
+	(mainRoutine)	 <------------  (conn.Read)<----------------
+
+		          serverChannel	 	    net.Conn
+
+	acceptRtouine用于接受connection,并将conn信息发送到mainRoutine，管理连接的客户端
+	mainRoutine用于接受各种消息，包括连接，Query,client、Server的退出等
+
+	clientProxy用于连接真正的client和server，作为消息转发的中间者，维护着真正client的连接
+	和向server channel发送消息的机制
+ */
 var PUT string = "put"
 var GET string = "get"
 var MAX_BUFFER_SIZE int = 500
@@ -69,7 +84,9 @@ func (kvs *keyValueServer) Start(port int) error {
 	}
 	init_db()
 	kvs.serverListener = listener
+	// 由于start需要立即返回，所以需要新的routine去监听new connection
 	go kvs.acceptRequest()
+	// 不能用锁，所以所有对server的db和client的管理都需要通过唯一的routine来操作，routine中封装channel的通信
 	go kvs.serverMainRoutine()
 
 	return nil
@@ -112,6 +129,7 @@ func (kvs *keyValueServer) serverMainRoutine() {
 			go clientWriteRoutine(newClient)
 		case query := <-kvs.queryChannel:
 			if query.isGet {
+				// 在value之前加上 "{key},"
 				keyPrefix := append([]byte(query.key), byte(','))
 				response := append(keyPrefix, get(query.key)...)
 				//response = append(response, byte('\n'))
@@ -212,8 +230,10 @@ func clientReadRoutine(kvs *keyValueServer, client *ClientProxy) {
 			switch string(queryParam[0]) {
 
 			case PUT:
+				// 由于取出的消息需要\n结果，此处将value\n作为整体存入
 				kvs.queryChannel <- &Query{false, string(queryParam[1]), queryParam[2]}
 			case GET:
+				// 此处需要将key之后的\n去掉
 				kvs.queryChannel <- &Query{isGet: true, key: string(queryParam[1][:len(queryParam[1]) - 1])}
 			}
 		}

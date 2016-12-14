@@ -75,3 +75,15 @@ in a custom location on AFS machines):
 ```bash
 $ export GOROOT=/usr/local/depot/go
 ```
+
+## 实现
+
+Server的结构在`server_impl.go`的顶部有描述.
+如果需要debug运行，将server的`debugMode`修改为`true`(结构体的第二个参数)。
+然后在需要调试的地方加入下面的语句。
+
+```Golang
+if debugMode {
+    fmt.Println("your debug and test code")
+}
+```
