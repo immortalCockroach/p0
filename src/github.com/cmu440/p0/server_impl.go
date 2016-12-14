@@ -13,22 +13,23 @@ import (
 	"io"
 	"strconv"
 )
+
 /**
-	整体结构
+整体结构
 
-		          clientChannel		    net.Conn
-	(acceptRoutine)			(conn.Write)
-	server           ------------> clientProxy ----------------> Client
-	(mainRoutine)	 <------------  (conn.Read)<----------------
+	          clientChannel		    net.Conn
+(acceptRoutine)			(conn.Write)
+server           ------------> clientProxy ----------------> Client
+(mainRoutine)	 <------------  (conn.Read)<----------------
 
-		          serverChannel	 	    net.Conn
+	          serverChannel	 	    net.Conn
 
-	acceptRtouine用于接受connection,并将conn信息发送到mainRoutine，管理连接的客户端
-	mainRoutine用于接受各种消息，包括连接，Query,client、Server的退出等
+acceptRtouine用于接受connection,并将conn信息发送到mainRoutine，管理连接的客户端
+mainRoutine用于接受各种消息，包括连接，Query,client、Server的退出等
 
-	clientProxy用于连接真正的client和server，作为消息转发的中间者，维护着真正client的连接
-	和向server channel发送消息的机制
- */
+clientProxy用于连接真正的client和server，作为消息转发的中间者，维护着真正client的连接
+和向server channel发送消息的机制
+*/
 var PUT string = "put"
 var GET string = "get"
 var MAX_BUFFER_SIZE int = 500
@@ -72,7 +73,6 @@ func (kvs *keyValueServer) Start(port int) error {
 
 	tcpAddr, err := net.ResolveTCPAddr("tcp", ":"+strconv.Itoa(port))
 
-
 	if err != nil {
 		return err
 	}
@@ -106,12 +106,12 @@ func (kvs *keyValueServer) Count() int {
 	if kvs.debugMode {
 		fmt.Println("get connect clients count")
 	}
-	if kvs.serverListener == nil || kvs.closed{
+	if kvs.serverListener == nil || kvs.closed {
 		return -1
 	}
 	kvs.countChannel <- 0
 
-	count := <- kvs.countChannel;
+	count := <-kvs.countChannel
 
 	if kvs.debugMode {
 		fmt.Println("connect clients count:", count)
@@ -137,7 +137,7 @@ func (kvs *keyValueServer) serverMainRoutine() {
 					fmt.Println("get result:", response)
 				}
 				for _, client := range kvs.clients {
-					if (len(client.messageChannel) == MAX_BUFFER_SIZE) {
+					if len(client.messageChannel) == MAX_BUFFER_SIZE {
 						continue
 					}
 					client.messageChannel <- response
@@ -193,7 +193,6 @@ func (kvs *keyValueServer) acceptRequest() {
 				}
 			}
 
-
 		}
 
 	}
@@ -222,9 +221,9 @@ func clientReadRoutine(kvs *keyValueServer, client *ClientProxy) {
 			queryParam := bytes.Split(res, []byte(","))
 			if kvs.debugMode {
 				if string(queryParam[0]) == PUT {
-					fmt.Println("%s:%v",string(queryParam[1]),queryParam[2])
+					fmt.Println("%s:%v", string(queryParam[1]), queryParam[2])
 				} else {
-					fmt.Println("%s",string(queryParam[1]))
+					fmt.Println("%s", string(queryParam[1]))
 				}
 			}
 			switch string(queryParam[0]) {
@@ -234,7 +233,7 @@ func clientReadRoutine(kvs *keyValueServer, client *ClientProxy) {
 				kvs.queryChannel <- &Query{false, string(queryParam[1]), queryParam[2]}
 			case GET:
 				// 此处需要将key之后的\n去掉
-				kvs.queryChannel <- &Query{isGet: true, key: string(queryParam[1][:len(queryParam[1]) - 1])}
+				kvs.queryChannel <- &Query{isGet: true, key: string(queryParam[1][:len(queryParam[1])-1])}
 			}
 		}
 
